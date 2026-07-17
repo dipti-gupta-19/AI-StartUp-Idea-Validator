@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -9,9 +10,14 @@ from .routers import authentication,ideas
 from . import model
 from .database import engine
 
-app = FastAPI()
 
-# model.Base.metadata.create_all(engine)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    model.Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 def base():

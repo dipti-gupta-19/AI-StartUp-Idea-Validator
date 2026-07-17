@@ -11,6 +11,10 @@ db_url = os.getenv("DATABASE_URL")
 if db_url is None:
     raise ValueError("DATABASE_URL is missing. Check your .env file.")
 
+# Render/Heroku provide postgres:// but SQLAlchemy expects postgresql://
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
 # SQLite vs PostgreSQL
 if db_url.startswith("sqlite"):
     engine = create_engine(

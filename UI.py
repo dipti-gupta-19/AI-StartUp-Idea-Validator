@@ -9,9 +9,26 @@ import os
 try:
     BACKEND_URL = st.secrets["BACKEND_URL"]
 except Exception:
-    BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+    BACKEND_URL = os.getenv(
+        "BACKEND_URL",
+        "https://ai-startup-idea-validator-yz0v.onrender.com",
+    )
 
-    
+BACKEND_URL = BACKEND_URL.rstrip("/")
+
+def api_error_message(response, fallback="Request failed"):
+    try:
+        payload = response.json()
+        if isinstance(payload, dict):
+            detail = payload.get("detail", fallback)
+            if isinstance(detail, list):
+                return "; ".join(str(item) for item in detail)
+            return str(detail)
+    except requests.exceptions.JSONDecodeError:
+        text = response.text.strip()
+        if text:
+            return text
+    return f"{fallback} (HTTP {response.status_code})"
 st.set_page_config(
     page_title="AI Startup Idea Validator",
     page_icon="💡",
@@ -56,13 +73,19 @@ def render_auth_page():
             if submit_button:
                 if new_username and new_password:
                     try:
-                        response = requests.post(f"{BACKEND_URL}/signin", json={"username": new_username, "password": new_password})
+                        response = requests.post(
+                            f"{BACKEND_URL}/signin",
+                            json={"username": new_username, "password": new_password},
+                            timeout=60,
+                        )
                         if response.status_code == 200:
                             st.success("Account created successfully! Please log in.")
                         else:
-                            st.error(f"Sign Up failed: {response.json().get('detail', 'Unknown error')}")
+                            st.error(f"Sign Up failed: {api_error_message(response, 'Unknown error')}")
                     except requests.exceptions.ConnectionError:
                         st.error("Could not connect to the backend server. Please check if it's running.")
+                    except requests.exceptions.RequestException as exc:
+                        st.error(f"Sign Up failed: {exc}")
                 else:
                     st.warning("Please enter a username and password.")
 
@@ -76,7 +99,11 @@ def render_auth_page():
             if submit_button:
                 if username and password:
                     try:
-                        response = requests.post(f"{BACKEND_URL}/login", data={"username": username, "password": password})
+                        response = requests.post(
+                            f"{BACKEND_URL}/login",
+                            data={"username": username, "password": password},
+                            timeout=60,
+                        )
                         if response.status_code == 200:
                             token_data = response.json()
                             st.session_state.token = token_data["access_token"]
@@ -85,9 +112,11 @@ def render_auth_page():
                             set_page("main")
                             st.rerun()
                         else:
-                            st.error(f"Login failed: {response.json().get('detail', 'Invalid credentials')}")
+                            st.error(f"Login failed: {api_error_message(response, 'Invalid credentials')}")
                     except requests.exceptions.ConnectionError:
                         st.error("Could not connect to the backend server. Please check if it's running.")
+                    except requests.exceptions.RequestException as exc:
+                        st.error(f"Login failed: {exc}")
                 else:
                     st.warning("Please enter your username and password.")
 
@@ -129,7 +158,7 @@ def render_main_page():
                     show_auth_page()
                     st.rerun()
                 elif response.status_code == 500:
-                    detail = response.json().get("detail", "")
+                    detail = api_error_message(response, "Server error")
 
                     if "503" in str(detail):
                         st.warning(
@@ -139,7 +168,7 @@ def render_main_page():
                     else:
                         st.error(detail)
                 else:
-                    st.error(f"Error: {response.json().get('detail', 'Failed to get evaluation.')}")
+                    st.error(f"Error: {api_error_message(response, 'Failed to get evaluation.')}")
             except requests.exceptions.ConnectionError:
                 st.error(
                     "❌ Unable to connect to the backend service. "
@@ -240,7 +269,7 @@ def render_history_page():
             show_auth_page()
             st.experimental_rerun()
         else:
-            st.error(f"Error fetching history: {response.json().get('detail', 'Failed to retrieve data.')}")
+            st.error(f"Error fetching history: {api_error_message(response, 'Failed to retrieve data.')}")
     except requests.exceptions.ConnectionError:
         st.error("Could not connect to the backend server. Please check if it's running.")
 
